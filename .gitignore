@@ -1,31 +1,41 @@
-# Built things
-_Debug/
-Compiled/
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# AudioCache can be rebuilt from sources
-AudioCache/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# Lockfile
-_OpenInEditor.lock
+# testing
+/coverage
 
-# User settings
-Game.agf.user
-*.crm.user
+# next.js
+/.next/
+/out/
 
-# Backups
-Game.agf.bak
-backup_acsprset.spr
+# production
+/build
 
-# Memory dumps
-*.dmp
+# misc
+.DS_Store
+*.pem
 
-# Temporary files
-# temporarily created during sprite or room background compression
-~aclzw.tmp
-# temporary, main game data, before getting packed into exe
-game28.dta
-# temporary build of the game before being moved to Compiled/ folder
-*.exe
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Log files
-warnings.log
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
