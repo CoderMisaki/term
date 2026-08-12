@@ -126,7 +126,7 @@ export default function TerminalComponent() {
   return (
     <div
       ref={terminalRef}
-      className="w-full h-full min-h-[400px] bg-black p-4 rounded-lg overflow-hidden"
+      className="w-full h-full bg-black overflow-hidden"
     />
   );
 }
