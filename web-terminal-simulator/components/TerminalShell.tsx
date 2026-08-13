@@ -394,7 +394,8 @@ export default function TerminalShell() {
       const term = termRef.current;
       if (!term) return;
       for (const char of data) {
-        if (char === "\r") {
+        // \r from Enter, \n from multi-line pastes — both submit the line.
+        if (char === "\r" || char === "\n") {
           submit();
         } else if (char === "\x7f" || char === "\b") {
           if (bufRef.current.length > 0) {
