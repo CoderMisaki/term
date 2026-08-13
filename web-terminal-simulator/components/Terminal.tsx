@@ -1,132 +1,150 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef, useCallback } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal as XTerm, type IDisposable } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
+import { useCallback, useEffect, useRef } from "react";
 
-export default function TerminalComponent() {
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const currentLineRef = useRef<string>('');
+export interface TerminalProps {
+  /** Raw keystroke/input data from the terminal. */
+  onData: (data: string) => void;
+  /** Fired on terminal resize (cols/rows) — used by the PTY backend. */
+  onResize?: (cols: number, rows: number) => void;
+  /** Called once the xterm instance is ready (after mount + fit). */
+  onReady?: (term: XTerm) => void;
+  autoFocus?: boolean;
+  className?: string;
+}
 
-  const prompt = useCallback((term: XTerm) => {
-    term.write('\r\n$ ');
+const TERMINAL_THEME = {
+  background: "#0b0f14",
+  foreground: "#c9d1d9",
+  cursor: "#3fb950",
+  cursorAccent: "#0b0f14",
+  selectionBackground: "#264f78",
+  black: "#1c2128",
+  red: "#ff7b72",
+  green: "#3fb950",
+  yellow: "#d29922",
+  blue: "#58a6ff",
+  magenta: "#bc8cff",
+  cyan: "#39c5cf",
+  white: "#c9d1d9",
+  brightBlack: "#6e7681",
+  brightRed: "#ffa198",
+  brightGreen: "#56d364",
+  brightYellow: "#e3b341",
+  brightBlue: "#79c0ff",
+  brightMagenta: "#d2a8ff",
+  brightCyan: "#56d4dd",
+  brightWhite: "#f0f6fc",
+};
+
+/**
+ * Client-only xterm.js wrapper. Handles:
+ * - instance creation with a dark, high-contrast theme
+ * - FitAddon fitting on mount, container resize (ResizeObserver), window
+ *   resize, orientation change, visual viewport changes and font load
+ * - rAF-coalesced fitting so resize storms don't spam fit()
+ * - focus on pointerdown (also summons the mobile keyboard)
+ */
+export default function TerminalComponent({
+  onData,
+  onResize,
+  onReady,
+  autoFocus = true,
+  className,
+}: TerminalProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<XTerm | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  // Keep the latest callbacks in refs so the mount effect can close over
+  // stable references (updated in an effect, not during render).
+  const onDataRef = useRef(onData);
+  const onResizeRef = useRef(onResize);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onDataRef.current = onData;
+    onResizeRef.current = onResize;
+    onReadyRef.current = onReady;
+  });
+
+  const fit = useCallback(() => {
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      try {
+        fitRef.current?.fit();
+      } catch {
+        // Container is hidden or not measurable yet — retry on next event.
+      }
+    });
   }, []);
 
-  const handleCommand = useCallback((commandStr: string, term: XTerm) => {
-    if (commandStr === '') {
-      prompt(term);
-      return;
-    }
-
-    const args = commandStr.split(' ');
-    const cmd = args[0].toLowerCase();
-
-    switch (cmd) {
-      case 'help':
-        term.writeln('Available commands:');
-        term.writeln('  help    - Show this help message');
-        term.writeln('  clear   - Clear the terminal screen');
-        term.writeln('  echo    - Print arguments to the standard output');
-        term.writeln('  whoami  - Print the current user');
-        term.writeln('  date    - Print the current date and time');
-        break;
-      case 'clear':
-        term.clear();
-        break;
-      case 'echo':
-        term.writeln(args.slice(1).join(' '));
-        break;
-      case 'whoami':
-        term.writeln('guest');
-        break;
-      case 'date':
-        term.writeln(new Date().toString());
-        break;
-      default:
-        term.writeln(`Command not found: ${cmd}`);
-    }
-
-    prompt(term);
-  }, [prompt]);
-
   useEffect(() => {
-    if (!terminalRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    // Initialize xterm.js
     const term = new XTerm({
       cursorBlink: true,
-      theme: {
-        background: '#000000',
-        foreground: '#ffffff',
-      },
-      fontFamily: 'var(--font-mono), monospace',
+      cursorStyle: "block",
+      fontFamily: 'var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+      fontSize: 14,
+      lineHeight: 1.25,
+      letterSpacing: 0,
+      scrollback: 5000,
+      allowTransparency: false,
+      convertEol: false,
+      theme: TERMINAL_THEME,
     });
-
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    term.open(container);
 
-    term.open(terminalRef.current);
-    fitAddon.fit();
+    termRef.current = term;
+    fitRef.current = fitAddon;
+    fit();
 
-    xtermRef.current = term;
-    fitAddonRef.current = fitAddon;
+    const dataDisposable: IDisposable = term.onData((data) => onDataRef.current(data));
+    const resizeDisposable: IDisposable = term.onResize(({ cols, rows }) =>
+      onResizeRef.current?.(cols, rows),
+    );
+    onReadyRef.current?.(term);
 
-    term.writeln('Welcome to Web Terminal Simulator v1.0.0');
-    term.writeln('Type "help" for a list of available commands.');
-    prompt(term);
+    const observer = new ResizeObserver(() => fit());
+    observer.observe(container);
 
-    const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
-      }
-    };
+    const handleWindowResize = () => fit();
+    const handleOrientationChange = () => setTimeout(fit, 150);
+    const handleVisualViewport = () => fit();
+    window.addEventListener("resize", handleWindowResize);
+    window.addEventListener("orientationchange", handleOrientationChange);
+    window.visualViewport?.addEventListener("resize", handleVisualViewport);
 
-    window.addEventListener('resize', handleResize);
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(fit).catch(() => undefined);
+    }
 
-    // Input handling
-    term.onData((data) => {
-      switch (data) {
-        case '\r': // Enter
-          term.write('\r\n');
-          handleCommand(currentLineRef.current.trim(), term);
-          currentLineRef.current = '';
-          break;
-        case '\u0003': // Ctrl+C
-          term.write('^C\r\n');
-          currentLineRef.current = '';
-          prompt(term);
-          break;
-        case '\u007F': // Backspace (DEL)
-        case '\b':     // Backspace
-          if (currentLineRef.current.length > 0) {
-            currentLineRef.current = currentLineRef.current.substring(0, currentLineRef.current.length - 1);
-            term.write('\b \b');
-          }
-          break;
-        default:
-          // Filter out other control characters to prevent injection/formatting issues
-          if (data >= String.fromCharCode(0x20) && data <= String.fromCharCode(0x7E)) {
-            currentLineRef.current += data;
-            term.write(data);
-          }
-      }
-    });
+    const focusTerminal = () => term.focus();
+    container.addEventListener("pointerdown", focusTerminal);
+    if (autoFocus) term.focus();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      dataDisposable.dispose();
+      resizeDisposable.dispose();
+      observer.disconnect();
+      window.removeEventListener("resize", handleWindowResize);
+      window.removeEventListener("orientationchange", handleOrientationChange);
+      window.visualViewport?.removeEventListener("resize", handleVisualViewport);
+      container.removeEventListener("pointerdown", focusTerminal);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       term.dispose();
-      xtermRef.current = null;
-      fitAddonRef.current = null;
+      termRef.current = null;
+      fitRef.current = null;
     };
-  }, [prompt, handleCommand]);
+  }, [fit, autoFocus]);
 
-  return (
-    <div
-      ref={terminalRef}
-      className="w-full h-full bg-black overflow-hidden"
-    />
-  );
+  return <div ref={containerRef} className={className} />;
 }

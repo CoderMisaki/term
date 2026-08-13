@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b0f14;
+  --foreground: #c9d1d9;
 }
 
 @theme inline {
@@ -12,26 +12,25 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
 }
 
-/* focus-visible styles */
+/* Keep a clear focus indicator (accessibility). */
 :focus-visible {
-  outline: 2px solid var(--foreground);
+  outline: 2px solid #3fb950;
   outline-offset: 2px;
 }
 
-/* prefers-reduced-motion support */
+/* Reduced motion support. */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -41,4 +40,49 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Safe-area helpers for notched mobile devices. */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.pl-safe {
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+}
+.pr-safe {
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+}
+
+/* ------------------------------------------------------------------ */
+/* xterm.js theming                                                    */
+/* ------------------------------------------------------------------ */
+
+.xterm .xterm-viewport {
+  background-color: #0b0f14 !important;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3441 transparent;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #2a3441;
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #3b4757;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Ensure the xterm element fills its (already padded) container. */
+.xterm {
+  width: 100%;
+  height: 100%;
 }

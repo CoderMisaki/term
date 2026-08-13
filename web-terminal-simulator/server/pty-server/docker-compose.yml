@@ -1,0 +1,15 @@
+services:
+  term-pty:
+    build: .
+    container_name: term-pty
+    ports:
+      - "8080:8080"
+    environment:
+      # MUST be changed for anything beyond local development.
+      TERMINAL_AUTH_TOKEN: ${TERMINAL_AUTH_TOKEN:-devtoken}
+      TERMINAL_SHELL: /bin/bash
+      TERMINAL_CWD: /home/term
+      MAX_CLIENTS: "8"
+      MAX_PER_IP: "2"
+      IDLE_TIMEOUT_MS: "1800000"
+    restart: unless-stopped
