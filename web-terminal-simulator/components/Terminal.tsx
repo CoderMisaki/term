@@ -80,6 +80,37 @@ async function readClipboard(): Promise<string> {
   }
 }
 
+interface CellMetrics {
+  width: number;
+  height: number;
+}
+
+/**
+ * Reads the current cell size from xterm's render service. This is an
+ * internal xterm API (pinned to @xterm/xterm 6.0.0); a failure just disables
+ * touch selection gracefully.
+ */
+function getCellMetrics(term: XTerm): CellMetrics | null {
+  try {
+    const core = (term as unknown as {
+      _core?: {
+        _renderService?: {
+          dimensions?: { css?: { cell?: { width?: number; height?: number } } };
+        };
+      };
+    })._core;
+    const cell = core?._renderService?.dimensions?.css?.cell;
+    const width = cell?.width;
+    const height = cell?.height;
+    if (width !== undefined && height !== undefined && width > 0 && height > 0) {
+      return { width, height };
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
 /**
  * Client-only xterm.js wrapper. Handles:
  * - instance creation with a dark, high-contrast theme
@@ -90,6 +121,8 @@ async function readClipboard(): Promise<string> {
  * - copy/paste: Ctrl/Cmd+C (with a selection), Ctrl/Cmd+Shift+C, Ctrl+Insert
  *   copy; Ctrl/Cmd+Shift+V and Shift+Insert paste; right-click opens a
  *   Copy / Paste / Select All context menu
+ * - touch selection: long-press then drag to select text on mobile, which
+ *   also opens the copy/paste menu
  *
  * Note: xterm.js blocks the browser's native selection (it preventDefaults
  * mousedown and ships `user-select: none`), so selection is xterm's own and
@@ -107,6 +140,17 @@ export default function TerminalComponent({
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const rafRef = useRef<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    /** Long-press fired — the finger is now dragging to extend a selection. */
+    active: boolean;
+    anchorCol: number;
+    anchorRow: number;
+    endX: number;
+    endY: number;
+  } | null>(null);
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -272,6 +316,123 @@ export default function TerminalComponent({
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
 
+    /* ------------------------------------------------------------ */
+    /* Touch: long-press, then drag to select (mobile)               */
+    /* ------------------------------------------------------------ */
+    // xterm blocks native selection entirely (preventDefault on mousedown +
+    // user-select: none), so on touch devices we drive xterm's own selection
+    // from touch events: hold still ~450ms to start, then drag to extend.
+    const clearLongPress = () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+
+    const cellFromEvent = (clientX: number, clientY: number) => {
+      const screen = container.querySelector<HTMLElement>(".xterm-screen");
+      const metrics = getCellMetrics(term);
+      if (!screen || !metrics) return null;
+      const rect = screen.getBoundingClientRect();
+      const buffer = term.buffer.active;
+      const col = Math.floor((clientX - rect.left) / metrics.width);
+      const row = Math.floor((clientY - rect.top) / metrics.height);
+      return {
+        col: Math.min(Math.max(col, 0), term.cols - 1),
+        row: Math.min(Math.max(buffer.viewportY + row, 0), Math.max(0, buffer.length - 1)),
+      };
+    };
+
+    const selectFromAnchor = (clientX: number, clientY: number) => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      const cell = cellFromEvent(clientX, clientY);
+      if (!cell) return;
+      const cols = term.cols;
+      const anchor = state.anchorRow * cols + state.anchorCol;
+      const current = cell.row * cols + cell.col;
+      const start = Math.min(anchor, current);
+      const end = Math.max(anchor, current);
+      term.select(start % cols, Math.floor(start / cols), end - start + 1);
+      state.endX = clientX;
+      state.endY = clientY;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      clearLongPress();
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      touchStateRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        active: false,
+        anchorCol: 0,
+        anchorRow: 0,
+        endX: touch.clientX,
+        endY: touch.clientY,
+      };
+      longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = null;
+        const state = touchStateRef.current;
+        if (!state || state.active) return;
+        const cell = cellFromEvent(state.startX, state.startY);
+        if (!cell) return;
+        state.active = true;
+        state.anchorCol = cell.col;
+        state.anchorRow = cell.row;
+        term.select(cell.col, cell.row, 1);
+        if (typeof navigator.vibrate === "function") navigator.vibrate(10);
+      }, 450);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      const touch = event.touches[0];
+      if (!state.active) {
+        // The finger moved before the long-press fired — treat as scrolling.
+        if (Math.hypot(touch.clientX - state.startX, touch.clientY - state.startY) > 10) {
+          clearLongPress();
+        }
+        return;
+      }
+      event.preventDefault(); // keep the viewport from scrolling while selecting
+      selectFromAnchor(touch.clientX, touch.clientY);
+    };
+
+    const openTouchMenu = (clientX: number, clientY: number) => {
+      setHasSelection(term.hasSelection());
+      setCopied(false);
+      const margin = 8;
+      const width = 176;
+      const height = 128;
+      const x = Math.min(clientX, window.innerWidth - width - margin);
+      let y = clientY - height - margin;
+      if (y < margin) y = Math.min(clientY + 16, window.innerHeight - height - margin);
+      setMenu({ x: Math.max(margin, x), y: Math.max(margin, y) });
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      clearLongPress();
+      const state = touchStateRef.current;
+      touchStateRef.current = null;
+      if (!state || !state.active) return;
+      const touch = event.changedTouches?.[0];
+      const clientX = touch?.clientX ?? state.endX;
+      const clientY = touch?.clientY ?? state.endY;
+      if (term.hasSelection()) openTouchMenu(clientX, clientY);
+    };
+
+    const handleTouchCancel = () => {
+      clearLongPress();
+      touchStateRef.current = null;
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    container.addEventListener("touchcancel", handleTouchCancel);
+
     const observer = new ResizeObserver(() => fit());
     observer.observe(container);
 
@@ -298,6 +459,12 @@ export default function TerminalComponent({
       container.removeEventListener("contextmenu", handleContextMenu, true);
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchCancel);
+      clearLongPress();
+      touchStateRef.current = null;
       window.removeEventListener("resize", handleWindowResize);
       window.removeEventListener("orientationchange", handleOrientationChange);
       window.visualViewport?.removeEventListener("resize", handleVisualViewport);
