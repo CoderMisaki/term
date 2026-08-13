@@ -127,8 +127,11 @@ secrets by some hosting tooling.)
    `TERMINAL_AUTH_TOKEN`, `SESSION_SECRET`, `CRON_SECRET` (required), plus
    `KV_REST_API_URL`/`KV_REST_API_TOKEN` (or `POSTGRES_URL`) for persistence.
 3. Framework preset: **Next.js**. Build command: `next build`.
-4. `vercel.json` defines the cron: `/api/cron/trigger` every minute. Vercel
-   sends it with `Authorization: Bearer <CRON_SECRET>`.
+4. `vercel.json` defines the cron: `/api/cron/trigger` once per day at
+   midnight UTC (`0 0 * * *`). Vercel sends it with
+   `Authorization: Bearer <CRON_SECRET>`. The Hobby plan fails deployment
+   if a cron expression runs more than once per day — bump the schedule to
+   Pro-compatible values like `*/30 * * * *` only on plans that allow them.
 5. **Vercel Cron limits change** — check the current docs
    (https://vercel.com/docs/cron-jobs) for the number of crons and minimum
    interval on your plan. Jobs whose schedules are finer than the trigger's

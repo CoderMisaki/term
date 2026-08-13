@@ -125,13 +125,6 @@ export function removePath(
 /* Listing                                                             */
 /* ------------------------------------------------------------------ */
 
-export function listDir(fs: VDir, path: string): { ok: boolean; entries?: VNode[]; error?: string } {
-  const node = getNode(fs, path);
-  if (!node) return { ok: false, error: `ls: cannot access '${path}': No such file or directory` };
-  if (node.type !== "dir") return { ok: false, error: `ls: cannot access '${path}': Not a directory` };
-  return { ok: true, entries: Object.values(node.children) };
-}
-
 /** Short ANSI-coloured label used by ls. Directories are blue, binaries green. */
 export function formatLsLine(name: string, node: VNode): string {
   if (node.type === "dir") return `\x1b[1;34m${name}\x1b[0m`;

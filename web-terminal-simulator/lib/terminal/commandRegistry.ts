@@ -742,14 +742,6 @@ export const COMMANDS: Record<string, CommandDef> = {
   reset,
 };
 
-export function getCommand(name: string): CommandDef | undefined {
-  return COMMANDS[name];
-}
-
-export function knownCommandNames(): string[] {
-  return Object.keys(COMMANDS).sort();
-}
-
 export function getDefaultShellState(): ShellState {
   const user = env.user;
   return {

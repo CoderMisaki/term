@@ -73,11 +73,6 @@ async function createAdapter(): Promise<StorageAdapter> {
   }
 }
 
-/** Resets the cached adapter (mainly useful in tests). */
-export function resetStorageForTests(): void {
-  cached = null;
-}
-
 export async function getStorageMode(): Promise<string> {
   return (await getStorage()).kind;
 }
