@@ -57,12 +57,15 @@ export class ServerlessExecutor {
 
     const write = (text: string) => {
       if (truncated) return;
-      let chunk = text;
+      // A terminal needs CRLF (\r\n) to move to the start of the next line.
+      // A bare \n only moves down, so the next line would start at whatever
+      // column the previous one ended on (cascading/overlapping output).
+      let chunk = text.replace(/\r?\n/g, "\r\n");
       const remaining = env.maxOutput - bytes;
       if (chunk.length >= remaining) {
         chunk = chunk.slice(0, remaining);
         truncated = true;
-        chunk += "\n\x1b[33m[output truncated — limit reached]\x1b[0m\n";
+        chunk += "\r\n\x1b[33m[output truncated — limit reached]\x1b[0m\r\n";
       }
       bytes += chunk.length;
       output += chunk;

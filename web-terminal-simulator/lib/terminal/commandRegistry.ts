@@ -459,6 +459,21 @@ async function packageUpdate(ctx: CommandContext, flavor: "apt" | "pkg"): Promis
   return 0;
 }
 
+async function packageUpgrade(ctx: CommandContext, flavor: "apt" | "pkg"): Promise<number> {
+  ctx.write(`Hit:1 http://pkg.term.dev/virtual ${flavor} InRelease\n`);
+  await pause(ctx);
+  ctx.write("Reading package lists... Done\n");
+  await pause(ctx);
+  ctx.write("Building dependency tree... Done\n");
+  await pause(ctx);
+  ctx.write("Calculating upgrade... Done\n");
+  await pause(ctx);
+  ctx.write("0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n");
+  ctx.state.lastUpdate = Date.now();
+  ctx.write("\x1b[33mVirtual registry refreshed — no network calls were made.\x1b[0m\n");
+  return 0;
+}
+
 const pkg: CommandDef = {
   description: "Virtual package manager (registry mode)",
   usage: "pkg install|remove|list|search|update [args...]",
@@ -476,6 +491,8 @@ const pkg: CommandDef = {
         return packageSearch({ ...ctx, args });
       case "update":
         return packageUpdate({ ...ctx, args }, "pkg");
+      case "upgrade":
+        return packageUpgrade({ ...ctx, args }, "pkg");
       default:
         ctx.write(
           "pkg: package manager (virtual registry mode)\n" +
@@ -503,6 +520,8 @@ const apt: CommandDef = {
         return packageRemove({ ...ctx, args });
       case "update":
         return packageUpdate({ ...ctx, args }, "apt");
+      case "upgrade":
+        return packageUpgrade({ ...ctx, args }, "apt");
       case "search":
         return packageSearch({ ...ctx, args });
       case "list": {
