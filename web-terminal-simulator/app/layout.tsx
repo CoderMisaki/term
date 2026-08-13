@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Web Terminal Simulator",
-  description: "A client-side web terminal simulator built with Next.js",
+  title: "term — web terminal",
+  description:
+    "A sandboxed web terminal with a virtual shell, server-side storage, a cron API, and an optional real PTY backend.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -24,7 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-dvh bg-[#0b0f14] text-zinc-100">{children}</body>
     </html>
   );
 }
